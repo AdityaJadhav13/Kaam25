@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isApproved() {
+      return isSignedIn() && 
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.approved == true &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.blocked == false;
+    }
+    
+    // Documents folder - all approved users can read/write
+    match /documents/{folderId}/{fileName} {
+      // Allow read if user is approved
+      allow read: if isApproved();
+      
+      // Allow write if user is approved (upload/update)
+      allow write: if isApproved() && 
+                   request.resource.size < 50 * 1024 * 1024; // Max 50MB
+      
+      // Allow delete if user is approved
+      allow delete: if isApproved();
+    }
+
+    // Chat uploads - all approved users can read/write
+    match /chat_uploads/team_chat/{messageId}/{fileName} {
+      // Allow read if user is approved
+      allow read: if isApproved();
+      
+      // Allow write if user is approved and file size is under 10MB
+      allow write: if isApproved() && 
+                   request.resource.size < 10 * 1024 * 1024; // Max 10MB
+      
+      // No deletion allowed (messages are immutable)
+      allow delete: if false;
+    }
+
+    // Announcement uploads - all approved users can read, only uploader can write
+    match /announcement_uploads/{announcementId}/{fileName} {
+      // Allow read if user is approved
+      allow read: if isApproved();
+      
+      // Allow write if user is approved and file size is under 10MB
+      allow write: if isApproved() && 
+                   request.resource.size < 10 * 1024 * 1024; // Max 10MB
+      
+      // No deletion allowed (announcements are immutable)
+      allow delete: if false;
+    }
+    
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

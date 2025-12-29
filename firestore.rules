@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return request.auth != null && request.auth.token.admin == true; }
+    function isSelf(uid) { return request.auth != null && request.auth.uid == uid; }
+    function isApproved() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approved == true &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.blocked == false;
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow update: if isAdmin() || (isSelf(uid) && onlyUpdatingAllowedFields());
+      allow create: if false; // created via Cloud Functions bootstrap
+    }
+    
+    function onlyUpdatingAllowedFields() {
+      // Users can only update lastLogin field or violation tracking (by self)
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      let allowedSelfUpdates = ['lastLogin', 'screenshotAttempts', 'lastViolation', 'violations'];
+      return affectedKeys.hasOnly(allowedSelfUpdates);
+    }
+
+    match /login_requests/{requestId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Folders - all approved users can CRUD
+    match /folders/{folderId} {
+      allow read: if isApproved();
+      allow create: if isApproved() && 
+                    request.resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.name is string &&
+                    request.resource.data.name.size() > 0 &&
+                    request.resource.data.name.size() <= 100;
+      allow update: if isApproved() &&
+                    request.resource.data.name is string &&
+                    request.resource.data.name.size() > 0 &&
+                    request.resource.data.name.size() <= 100;
+      allow delete: if isApproved() || isAdmin();
+    }
+
+    // Documents - all approved users can CRUD
+    match /documents/{documentId} {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+                    request.resource.data.uploadedBy == request.auth.uid &&
+                    request.resource.data.fileName is string &&
+                    request.resource.data.fileName.size() > 0 &&
+                    request.resource.data.folderId is string;
+      allow update: if isApproved();
+      allow delete: if isApproved() || isAdmin();
+    }
+
+    // Team Chat - single group chat with messages subcollection
+    match /chats/team_chat {
+      allow read: if isApproved();
+      
+      match /messages/{messageId} {
+        allow read: if isApproved();
+        allow create: if isApproved() &&
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.senderName is string &&
+                      request.resource.data.senderName.size() > 0 &&
+                      request.resource.data.senderRole in ['admin', 'member'] &&
+                      request.resource.data.messageType in ['text', 'file'] &&
+                      request.resource.data.content is string &&
+                      request.resource.data.content.size() > 0 &&
+                      (request.resource.data.messageType == 'text' ? 
+                        request.resource.data.content.size() <= 1000 : true) &&
+                      request.resource.data.createdAt == request.time;
+        allow update, delete: if false; // Messages are immutable
+      }
+    }
+
+    // Presence tracking for online users
+    match /presence/{userId} {
+      allow read: if isApproved();
+      allow write: if isSignedIn() && userId == request.auth.uid;
+    }
+
+    // Announcements - all approved users can read and create, only creator or admin can edit
+    match /announcements/{announcementId} {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+                    request.resource.data.title is string &&
+                    request.resource.data.title.size() > 0 &&
+                    request.resource.data.title.size() <= 200 &&
+                    request.resource.data.description is string &&
+                    request.resource.data.description.size() > 0 &&
+                    request.resource.data.type in ['normal', 'important', 'urgent'] &&
+                    request.resource.data.actionRequired is bool &&
+                    request.resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.createdByName is string &&
+                    request.resource.data.createdAt == request.time &&
+                    request.resource.data.updatedAt == request.time &&
+                    request.resource.data.readBy is list;
+      allow update: if isApproved() && (
+                    // Any user can add themselves to readBy
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']) &&
+                     request.resource.data.readBy.hasAll(resource.data.readBy)) ||
+                    // Any approved member can edit announcement content
+                    (request.resource.data.createdBy == resource.data.createdBy &&
+                     request.resource.data.createdByName == resource.data.createdByName &&
+                     request.resource.data.createdAt == resource.data.createdAt &&
+                     request.resource.data.updatedAt == request.time)
+                   );
+      allow delete: if false; // Announcements cannot be deleted (data immutability)
+    }
+  }
+}

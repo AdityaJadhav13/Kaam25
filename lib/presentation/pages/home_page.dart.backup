@@ -1,0 +1,656 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/theme/app_colors.dart';
+import '../../core/widgets/kaam_badge.dart';
+import '../../core/widgets/kaam_button.dart';
+import '../../core/widgets/kaam_text_field.dart';
+import '../../data/datasources/mock_data.dart';
+import '../../data/models/enums.dart';
+import '../../data/models/folder.dart';
+import '../../data/models/note.dart';
+import '../controllers/auth_controller.dart';
+import '../controllers/uploads_controller.dart';
+import '../widgets/file_card.dart';
+
+class HomePage extends ConsumerStatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  Folder? _selectedFolder;
+  Note? _selectedNote;
+
+  late List<Folder> _folders;
+
+  final _folderSearch = TextEditingController();
+  final _noteSearch = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _folders = List<Folder>.from(MockData.folders);
+  }
+
+  @override
+  void dispose() {
+    _folderSearch.dispose();
+    _noteSearch.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final folders = _folders
+        .where(
+          (f) => f.name.toLowerCase().contains(
+            _folderSearch.text.trim().toLowerCase(),
+          ),
+        )
+        .toList();
+
+    if (_selectedFolder == null) {
+      return _FolderListView(
+        folders: folders,
+        folderSearch: _folderSearch,
+        onSelectFolder: (f) => setState(() => _selectedFolder = f),
+        onCreateFolder: () => _toast(context, 'Create Folder (stub)'),
+        onEditFolder: _editFolder,
+      );
+    }
+
+    final notes = MockData.notes
+        .where(
+          (n) =>
+              n.folderId == _selectedFolder!.id &&
+              n.title.toLowerCase().contains(
+                _noteSearch.text.trim().toLowerCase(),
+              ),
+        )
+        .toList();
+
+    if (_selectedNote != null) {
+      return _NoteDetailView(
+        note: _selectedNote!,
+        onBack: () => setState(() => _selectedNote = null),
+      );
+    }
+
+    return _FolderDetailView(
+      folder: _selectedFolder!,
+      notes: notes,
+      noteSearch: _noteSearch,
+      onBack: () => setState(() => _selectedFolder = null),
+      onSelectNote: (n) => setState(() => _selectedNote = n),
+    );
+  }
+
+  void _editFolder(Folder folder) {
+    final nameCtrl = TextEditingController(text: folder.name);
+    final emojiCtrl = TextEditingController(text: folder.icon);
+    bool hasNew = folder.hasNewContent;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Edit Folder',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emojiCtrl,
+                decoration: const InputDecoration(labelText: 'Emoji'),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Switch(
+                    value: hasNew,
+                    onChanged: (v) {
+                      hasNew = v;
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Mark as New'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _folders = _folders.map((f) {
+                        if (f.id != folder.id) return f;
+                        return Folder(
+                          id: f.id,
+                          name: nameCtrl.text,
+                          icon: emojiCtrl.text,
+                          noteCount: f.noteCount,
+                          hasNewContent: hasNew,
+                        );
+                      }).toList();
+
+                      if (_selectedFolder?.id == folder.id) {
+                        _selectedFolder = Folder(
+                          id: folder.id,
+                          name: nameCtrl.text,
+                          icon: emojiCtrl.text,
+                          noteCount: folder.noteCount,
+                          hasNewContent: hasNew,
+                        );
+                      }
+                    });
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FolderListView extends StatelessWidget {
+  const _FolderListView({
+    required this.folders,
+    required this.folderSearch,
+    required this.onSelectFolder,
+    required this.onCreateFolder,
+    required this.onEditFolder,
+  });
+
+  final List<Folder> folders;
+  final TextEditingController folderSearch;
+  final void Function(Folder folder) onSelectFolder;
+  final VoidCallback onCreateFolder;
+  final void Function(Folder folder) onEditFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Notes & Documents',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              KaamTextField(
+                controller: folderSearch,
+                hintText: 'Search folders...',
+                leadingIcon: Icons.search,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: folders.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final folder = folders[index];
+
+              return Card(
+                child: InkWell(
+                  onTap: () => onSelectFolder(folder),
+                  onLongPress: () => onEditFolder(folder),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Text(folder.icon, style: const TextStyle(fontSize: 28)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      folder.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                  ),
+                                  if (folder.hasNewContent) ...[
+                                    const SizedBox(width: 8),
+                                    const KaamBadge(
+                                      label: 'New',
+                                      variant: KaamBadgeVariant.primary,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${folder.noteCount} ${folder.noteCount == 1 ? 'note' : 'notes'}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: KaamButton(
+            fullWidth: true,
+            size: KaamButtonSize.lg,
+            onPressed: onCreateFolder,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add),
+                SizedBox(width: 8),
+                Text('Create Folder'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FolderDetailView extends ConsumerWidget {
+  const _FolderDetailView({
+    required this.folder,
+    required this.notes,
+    required this.noteSearch,
+    required this.onBack,
+    required this.onSelectNote,
+  });
+
+  final Folder folder;
+  final List<Note> notes;
+  final TextEditingController noteSearch;
+  final VoidCallback onBack;
+  final void Function(Note note) onSelectNote;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uploads = ref.watch(uploadsControllerProvider);
+    final auth = ref.watch(authControllerProvider);
+    final uploaderId = auth.user?.id;
+
+    final folderFiles = uploads.files
+        .where((f) => f.context == FileContext.note && f.contextId == folder.id)
+        .toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  KaamButton(
+                    onPressed: onBack,
+                    variant: KaamButtonVariant.ghost,
+                    size: KaamButtonSize.icon,
+                    child: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(folder.icon, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      folder.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              KaamTextField(
+                controller: noteSearch,
+                hintText: 'Search notes...',
+                leadingIcon: Icons.search,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              for (final file in folderFiles)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: FileCard(
+                    file: file,
+                    uploaderName: MockData.users
+                        .where((u) => u.id == file.uploadedBy)
+                        .map((u) => u.name)
+                        .firstOrNull,
+                    onTap: () => _toast(context, 'File preview (stub)'),
+                    showUploader: true,
+                    showDate: true,
+                  ),
+                ),
+              if (notes.isEmpty && folderFiles.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.insert_drive_file_outlined,
+                        size: 44,
+                        color: AppColors.mutedForeground.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'No notes or files in this folder yet',
+                        style: TextStyle(color: AppColors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (final note in notes)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Card(
+                      child: InkWell(
+                        onTap: () => onSelectNote(note),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.description_outlined,
+                                color: AppColors.mutedForeground,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            note.title,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (note.isNew) ...[
+                                          const SizedBox(width: 8),
+                                          const KaamBadge(
+                                            label: 'New',
+                                            variant: KaamBadgeVariant.primary,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      note.content,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      MaterialLocalizations.of(
+                                        context,
+                                      ).formatCompactDate(note.updatedAt),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: AppColors.mutedForeground,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: KaamButton(
+                  variant: KaamButtonVariant.outline,
+                  size: KaamButtonSize.lg,
+                  onPressed: () => _toast(context, 'Add Note (stub)'),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add),
+                      SizedBox(width: 8),
+                      Text('Add Note'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: KaamButton(
+                  variant: KaamButtonVariant.outline,
+                  size: KaamButtonSize.lg,
+                  onPressed: uploaderId == null
+                      ? null
+                      : () async {
+                          final filename = await _promptFileName(
+                            context,
+                            defaultName: 'example.pdf',
+                          );
+                          if (filename == null) return;
+                          await ref
+                              .read(uploadsControllerProvider.notifier)
+                              .simulateUpload(
+                                fileName: filename,
+                                size: 1024 * 1024,
+                                uploadedBy: uploaderId,
+                                context: FileContext.note,
+                                contextId: folder.id,
+                              );
+                        },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.upload_file),
+                      SizedBox(width: 8),
+                      Text('Upload File'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NoteDetailView extends StatelessWidget {
+  const _NoteDetailView({required this.note, required this.onBack});
+
+  final Note note;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              KaamButton(
+                onPressed: onBack,
+                variant: KaamButtonVariant.ghost,
+                size: KaamButtonSize.icon,
+                child: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  note.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              note.content,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Last updated: ${MaterialLocalizations.of(context).formatCompactDate(note.updatedAt)}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.mutedForeground),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<String?> _promptFileName(
+  BuildContext context, {
+  required String defaultName,
+}) async {
+  final controller = TextEditingController(text: defaultName);
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Upload file'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Filename (e.g. doc.pdf)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Start'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+void _toast(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (!iterator.moveNext()) return null;
+    return iterator.current;
+  }
+}

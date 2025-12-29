@@ -1,0 +1,27 @@
+{
+  "name": "kaam25-functions",
+  "scripts": {
+    "lint": "eslint .",
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "npm run build && firebase deploy --only functions",
+    "test": "npm run build"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.4.0",
+    "firebase-functions": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.30",
+    "eslint": "^9.14.0",
+    "eslint-config-google": "^0.14.0",
+    "firebase-functions-test": "^3.3.0",
+    "typescript": "^5.6.3"
+  },
+  "private": true
+}

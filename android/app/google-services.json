@@ -1,0 +1,134 @@
+{
+  "project_info": {
+    "project_number": "388870218082",
+    "project_id": "chalmumbai",
+    "storage_bucket": "chalmumbai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388870218082:android:b0f8f0f7bd904109db4c3b",
+        "android_client_info": {
+          "package_name": "com.kaam25.kaam25"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "388870218082-n6abfsub64gjgdk01nb4aiqt25q6kmnc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kaam25.kaam25",
+            "certificate_hash": "d3184508ee89f83e633556ded844c6d6f5a19510"
+          }
+        },
+        {
+          "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBG17qWvlsswS40mqtAKm5ghXRwfwUXpI0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "388870218082-cc4ggmp0p50ob947cvg7v3bmp9qp2trn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kaam25.kaam25App"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388870218082:android:03636a9bb11b12bfdb4c3b",
+        "android_client_info": {
+          "package_name": "com.kaam25.kaam25_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBG17qWvlsswS40mqtAKm5ghXRwfwUXpI0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "388870218082-cc4ggmp0p50ob947cvg7v3bmp9qp2trn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kaam25.kaam25App"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388870218082:android:44155942b6ee5953db4c3b",
+        "android_client_info": {
+          "package_name": "com.yourdomain.chalmumbai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "388870218082-1meil393c2ubrc0rsb9hdrqk3sg4ahqe.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yourdomain.chalmumbai",
+            "certificate_hash": "d3184508ee89f83e633556ded844c6d6f5a19510"
+          }
+        },
+        {
+          "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBG17qWvlsswS40mqtAKm5ghXRwfwUXpI0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "388870218082-cc4ggmp0p50ob947cvg7v3bmp9qp2trn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kaam25.kaam25App"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
