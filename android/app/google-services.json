@@ -58,46 +58,10 @@
       },
       "oauth_client": [
         {
-          "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBG17qWvlsswS40mqtAKm5ghXRwfwUXpI0"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "388870218082-cc4ggmp0p50ob947cvg7v3bmp9qp2trn.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.kaam25.kaam25App"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:388870218082:android:44155942b6ee5953db4c3b",
-        "android_client_info": {
-          "package_name": "com.yourdomain.chalmumbai"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "388870218082-1meil393c2ubrc0rsb9hdrqk3sg4ahqe.apps.googleusercontent.com",
+          "client_id": "388870218082-fbtbefm8t1oj70uc5ivao8nmo47a8e2s.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.yourdomain.chalmumbai",
+            "package_name": "com.kaam25.kaam25_app",
             "certificate_hash": "d3184508ee89f83e633556ded844c6d6f5a19510"
           }
         },
