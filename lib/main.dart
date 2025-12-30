@@ -8,8 +8,10 @@ import 'firebase_options.dart';
 import 'presentation/controllers/app_router.dart';
 import 'core/services/screen_security_service.dart';
 import 'core/services/presence_service.dart';
+import 'core/services/notification_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +35,14 @@ Future<void> main() async {
     );
     presenceService.setupLifecycleTracking();
 
+    // Initialize notification service
+    final notificationService = NotificationService(
+      FirebaseFirestore.instance,
+      FirebaseAuth.instance,
+      FirebaseMessaging.instance,
+    );
+    await notificationService.initialize();
+
     // Set user online when app starts
     if (FirebaseAuth.instance.currentUser != null) {
       await presenceService.goOnline();
@@ -43,6 +53,7 @@ Future<void> main() async {
         overrides: [
           screenSecurityServiceProvider.overrideWithValue(screenSecurity),
           presenceServiceProvider.overrideWithValue(presenceService),
+          notificationServiceProvider.overrideWithValue(notificationService),
         ],
         child: const Kaam25App(),
       ),

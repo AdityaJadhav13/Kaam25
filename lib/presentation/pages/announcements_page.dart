@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/kaam_badge.dart';
@@ -12,6 +11,7 @@ import '../../data/models/announcement.dart';
 import '../../data/models/enums.dart';
 import '../controllers/announcements_controller.dart';
 import '../controllers/auth_controller.dart';
+import 'document_viewer_page.dart';
 
 class AnnouncementsPage extends ConsumerStatefulWidget {
   const AnnouncementsPage({super.key});
@@ -416,7 +416,12 @@ class _AnnouncementDetail extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _AttachmentCard(
                       attachment: attachment,
-                      onTap: () => _openAttachment(attachment.downloadUrl),
+                      onTap: () => _openAttachment(
+                        context,
+                        attachment.downloadUrl,
+                        attachment.fileName,
+                        attachment.fileType,
+                      ),
                     ),
                   ),
               ],
@@ -521,11 +526,21 @@ class _AnnouncementDetail extends ConsumerWidget {
     );
   }
 
-  void _openAttachment(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+  void _openAttachment(
+    BuildContext context,
+    String url,
+    String fileName,
+    String fileType,
+  ) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => DocumentViewerPage(
+          documentUrl: url,
+          documentName: fileName,
+          fileType: fileType,
+        ),
+      ),
+    );
   }
 }
 

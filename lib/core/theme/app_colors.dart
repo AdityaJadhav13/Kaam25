@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Centralized design tokens (derived from `kaam25_reference/src/styles/theme.css`).
-///
-/// Rule: do not scatter hard-coded colors throughout widgets; use these tokens.
+/// Centralized design tokens for the app's light theme.
 abstract final class AppColors {
+  // Light theme colors
   static const background = Color(0xFFFFFFFF);
   static const foreground = Color(0xFF111111);
 
@@ -26,10 +25,10 @@ abstract final class AppColors {
   static const border = Color(0x1A000000);
   static const inputBackground = Color(0xFFF3F3F5);
 
-  // Status helper colors used in reference screens.
-  static const warning = Color(0xFFF59E0B); // tailwind yellow-500-ish
+  // Status helper colors
+  static const warning = Color(0xFFF59E0B);
   static const warningBackground = Color(0x1AF59E0B);
-  static const danger = Color(0xFFDC2626); // tailwind red-600-ish
+  static const danger = Color(0xFFDC2626);
   static const dangerBackground = Color(0x1ADC2626);
-  static const success = Color(0xFF16A34A); // tailwind green-600-ish
+  static const success = Color(0xFF16A34A);
 }

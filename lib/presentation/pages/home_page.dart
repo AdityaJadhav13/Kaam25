@@ -14,6 +14,7 @@ import '../../data/models/folder.dart';
 import '../../features/home/documents_repository.dart';
 import '../../features/home/home_providers.dart';
 import '../controllers/auth_controller.dart';
+import 'document_viewer_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -853,54 +854,21 @@ class _DocumentCard extends ConsumerWidget {
   }
 
   void _openDocument(BuildContext context, WidgetRef ref, Document document) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(document.fileName),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('Get Download Link'),
-              onTap: () async {
-                try {
-                  final url = await ref
-                      .read(documentControllerProvider.notifier)
-                      .getDownloadUrl(document.id);
+    // Open document in in-app viewer
+    if (document.downloadUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document URL not available')),
+      );
+      return;
+    }
 
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Download URL copied to clipboard'),
-                        action: SnackBarAction(
-                          label: 'View',
-                          onPressed: () {
-                            // Could open URL in browser here
-                            debugPrint('Download URL: $url');
-                          },
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
-                  }
-                }
-              },
-            ),
-          ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => DocumentViewerPage(
+          documentUrl: document.downloadUrl!,
+          documentName: document.fileName,
+          fileType: document.fileType,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }

@@ -69,10 +69,30 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(busy: false, message: errorMessage);
     } catch (e) {
       debugPrint('❌ Unexpected error during Google sign-in: $e');
-      state = state.copyWith(
-        busy: false,
-        message: 'Google sign-in failed. Please try again.',
-      );
+
+      // Check if it's a PlatformException with network error (common on emulators)
+      final errorString = e.toString();
+      String message;
+
+      if (errorString.contains('network_error') ||
+          errorString.contains('ApiException: 7')) {
+        message =
+            'Google Sign-In not configured for Android. Please use Email/Password to sign in.';
+        debugPrint('💡 Tip: To enable Google Sign-In on Android:');
+        debugPrint('   1. Get SHA-1: ./gradlew signingReport');
+        debugPrint(
+          '   2. Add to Firebase Console > Project Settings > Android app',
+        );
+        debugPrint('   3. Download new google-services.json');
+      } else if (errorString.contains('sign_in_canceled') ||
+          errorString.contains('12501')) {
+        message = 'Google sign-in was cancelled.';
+      } else {
+        message =
+            'Google sign-in failed. Please use Email/Password to sign in.';
+      }
+
+      state = state.copyWith(busy: false, message: message);
     }
   }
 
@@ -124,7 +144,7 @@ class AuthController extends StateNotifier<AuthState> {
 
       debugPrint('✅ User loaded: ${user.email}, role: ${user.role}');
       AuthDebugger.logFirestoreUserState(user.id);
-      
+
       final gate = _resolveGate(user: user, deviceId: deviceId);
       debugPrint('✅ Gate resolved: $gate');
 
@@ -206,6 +226,8 @@ final googleSignInProvider = Provider<GoogleSignIn>(
     serverClientId:
         '388870218082-hn3afnnstb8sd3o3q9p2ku0docrcl268.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
+    // Force account selection and ensure fresh sign-in
+    forceCodeForRefreshToken: true,
   ),
 );
 final firebaseFirestoreProvider = Provider<FirebaseFirestore>(

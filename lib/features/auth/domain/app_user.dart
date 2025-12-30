@@ -18,6 +18,8 @@ class AppUser {
     this.lastViolation,
     this.blockedAt,
     this.blockedReason,
+    this.themePreference = 'system',
+    this.notificationsEnabled = true,
   });
 
   final String id;
@@ -34,6 +36,8 @@ class AppUser {
   final DateTime? lastViolation;
   final DateTime? blockedAt;
   final String? blockedReason;
+  final String themePreference; // 'system', 'light', 'dark'
+  final bool notificationsEnabled;
 
   bool get isAdmin => role == UserRole.admin;
   bool get isApproved => approved && !blocked;
@@ -58,6 +62,8 @@ class AppUser {
     DateTime? lastViolation,
     DateTime? blockedAt,
     String? blockedReason,
+    String? themePreference,
+    bool? notificationsEnabled,
   }) {
     return AppUser(
       id: id,
@@ -74,6 +80,8 @@ class AppUser {
       lastViolation: lastViolation ?? this.lastViolation,
       blockedAt: blockedAt ?? this.blockedAt,
       blockedReason: blockedReason ?? this.blockedReason,
+      themePreference: themePreference ?? this.themePreference,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     );
   }
 
@@ -106,6 +114,8 @@ class AppUser {
       lastViolation: _asDateOrNull(data['lastViolation']),
       blockedAt: _asDateOrNull(data['blockedAt']),
       blockedReason: data['blockedReason'] as String?,
+      themePreference: data['themePreference'] as String? ?? 'system',
+      notificationsEnabled: data['notificationsEnabled'] as bool? ?? true,
     );
   }
 
@@ -138,6 +148,8 @@ class AppUser {
         'lastViolation': Timestamp.fromDate(lastViolation!),
       if (blockedAt != null) 'blockedAt': Timestamp.fromDate(blockedAt!),
       if (blockedReason != null) 'blockedReason': blockedReason,
+      'themePreference': themePreference,
+      'notificationsEnabled': notificationsEnabled,
     };
   }
 }

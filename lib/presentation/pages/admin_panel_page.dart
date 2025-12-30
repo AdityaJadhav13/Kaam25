@@ -19,6 +19,8 @@ class _AdminPanelPageState extends ConsumerState<AdminPanelPage>
   late TabController _tabController;
   final _firestore = FirebaseFirestore.instance;
   final _functions = FirebaseFunctions.instance;
+  final Set<String> _loadingUsers = {};
+  final Set<String> _loadingDevices = {};
 
   @override
   void initState() {
@@ -33,55 +35,104 @@ class _AdminPanelPageState extends ConsumerState<AdminPanelPage>
   }
 
   Future<void> _approveUser(String uid) async {
+    setState(() => _loadingUsers.add(uid));
     try {
       final callable = _functions.httpsCallable('approveUser');
       await callable.call({'uid': uid});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User approved successfully')),
+          const SnackBar(
+            content: Text('✅ User approved successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingUsers.remove(uid));
       }
     }
   }
 
   Future<void> _blockUser(String uid) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block User'),
+        content: const Text(
+          'Are you sure you want to block this user? They will lose access to the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _loadingUsers.add(uid));
     try {
       final callable = _functions.httpsCallable('blockUser');
-      await callable.call({'uid': uid});
+      await callable.call({'uid': uid, 'reason': 'Blocked by administrator'});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User blocked successfully')),
+          const SnackBar(
+            content: Text('🚫 User blocked successfully'),
+            backgroundColor: Colors.orange,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingUsers.remove(uid));
       }
     }
   }
 
   Future<void> _approveDevice(String uid, String deviceId) async {
+    final key = '${uid}_$deviceId';
+    setState(() => _loadingDevices.add(key));
     try {
       final callable = _functions.httpsCallable('approveDevice');
       await callable.call({'uid': uid, 'deviceId': deviceId});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Device approved successfully')),
+          const SnackBar(
+            content: Text('✅ Device approved successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingDevices.remove(key));
       }
     }
   }
@@ -221,19 +272,39 @@ class _AdminPanelPageState extends ConsumerState<AdminPanelPage>
                           if (!approved)
                             Expanded(
                               child: KaamButton(
-                                onPressed: () => _approveUser(uid),
+                                onPressed: _loadingUsers.contains(uid)
+                                    ? null
+                                    : () => _approveUser(uid),
                                 size: KaamButtonSize.normal,
-                                child: const Text('Approve'),
+                                child: _loadingUsers.contains(uid)
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Approve'),
                               ),
                             ),
                           if (!approved && !blocked) const SizedBox(width: 8),
                           if (!blocked)
                             Expanded(
                               child: KaamButton(
-                                onPressed: () => _blockUser(uid),
+                                onPressed: _loadingUsers.contains(uid)
+                                    ? null
+                                    : () => _blockUser(uid),
                                 variant: KaamButtonVariant.ghost,
                                 size: KaamButtonSize.normal,
-                                child: const Text('Block'),
+                                child: _loadingUsers.contains(uid)
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Block'),
                               ),
                             ),
                         ],
@@ -332,10 +403,28 @@ class _AdminPanelPageState extends ConsumerState<AdminPanelPage>
                         ),
                         const SizedBox(height: 12),
                         KaamButton(
-                          onPressed: () => _approveDevice(userId, deviceId),
+                          onPressed:
+                              _loadingDevices.contains('${userId}_$deviceId')
+                              ? null
+                              : () => _approveDevice(userId, deviceId),
                           fullWidth: true,
                           size: KaamButtonSize.normal,
-                          child: const Text('Approve Device'),
+                          child: _loadingDevices.contains('${userId}_$deviceId')
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      height: 16,
+                                      width: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Approving...'),
+                                  ],
+                                )
+                              : const Text('Approve Device'),
                         ),
                       ],
                     ),

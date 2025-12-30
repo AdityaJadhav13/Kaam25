@@ -11,6 +11,7 @@ import '../pages/onboarding_page.dart';
 import '../pages/pending_approval_page.dart';
 import '../pages/splash_page.dart';
 import '../pages/stories_page.dart';
+import '../pages/privacy_security_page.dart';
 import 'router_notifier.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
@@ -49,6 +50,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const StoriesPage(),
       ),
       GoRoute(path: '/chat', builder: (context, state) => const ChatPage()),
+      GoRoute(
+        path: '/profile/privacy-security',
+        builder: (context, state) => const PrivacySecurityPage(),
+      ),
     ],
   );
 });

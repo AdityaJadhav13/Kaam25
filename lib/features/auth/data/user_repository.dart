@@ -70,4 +70,21 @@ class UserRepository {
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
+  /// Update user preferences (theme, notifications)
+  Future<void> updatePreferences({
+    required String uid,
+    String? themePreference,
+    bool? notificationsEnabled,
+  }) async {
+    final updates = <String, dynamic>{};
+    if (themePreference != null) updates['themePreference'] = themePreference;
+    if (notificationsEnabled != null) {
+      updates['notificationsEnabled'] = notificationsEnabled;
+    }
+
+    if (updates.isEmpty) return;
+
+    await _users.doc(uid).update(updates);
+  }
 }

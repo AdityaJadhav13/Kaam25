@@ -12,13 +12,30 @@ function getSuperAdminUid(): string {
   return uid as string;
 }
 
-function assertAdmin(context: functions.https.CallableContext) {
+// Better admin check that queries Firestore
+async function assertAdminAsync(context: functions.https.CallableContext): Promise<void> {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
   }
-  if (!context.auth.token.admin) {
+  
+  // Check custom claim first (fast)
+  if (context.auth.token.admin) {
+    return;
+  }
+  
+  // Fallback to Firestore check (for admins without custom claims set yet)
+  const userDoc = await db.collection('users').doc(context.auth.uid).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+  
+  const userData = userDoc.data();
+  if (userData?.role !== 'admin') {
     throw new functions.https.HttpsError('permission-denied', 'Admin only');
   }
+  
+  // Set custom claim for future requests
+  await admin.auth().setCustomUserClaims(context.auth.uid, { admin: true });
 }
 
 export const bootstrapUser = functions.https.onCall(async (data, context) => {
@@ -78,23 +95,51 @@ export const bootstrapUser = functions.https.onCall(async (data, context) => {
 });
 
 export const approveUser = functions.https.onCall(async (data, context) => {
-  assertAdmin(context);
+  await assertAdminAsync(context);
   const { uid } = data;
   if (!uid) throw new functions.https.HttpsError('invalid-argument', 'uid required');
 
-  await db.collection('users').doc(uid).set({ approved: true }, { merge: true });
+  // Approve user and set custom claim if they're an admin
+  const userRef = db.collection('users').doc(uid);
+  const userDoc = await userRef.get();
+  
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+  
+  const userData = userDoc.data();
+  
+  await userRef.set({ approved: true }, { merge: true });
+  
+  // If user is admin, set custom claim
+  if (userData?.role === 'admin') {
+    await admin.auth().setCustomUserClaims(uid, { admin: true });
+  }
+  
   return { ok: true };
 });
 
 export const approveDevice = functions.https.onCall(async (data, context) => {
-  assertAdmin(context);
+  await assertAdminAsync(context);
   const { uid, deviceId } = data;
   if (!uid || !deviceId) {
     throw new functions.https.HttpsError('invalid-argument', 'uid and deviceId required');
   }
 
   const userRef = db.collection('users').doc(uid);
-  await userRef.update({ devices: admin.firestore.FieldValue.arrayUnion(deviceId) });
+  const userDoc = await userRef.get();
+  
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+  
+  // Add device to user's approved devices
+  await userRef.update({ 
+    devices: admin.firestore.FieldValue.arrayUnion(deviceId),
+    approved: true // Auto-approve user when approving their first device
+  });
+  
+  // Update the login request status
   await db.collection('login_requests').doc(`${uid}_${deviceId}`).set(
     {
       status: 'approved',
@@ -102,20 +147,27 @@ export const approveDevice = functions.https.onCall(async (data, context) => {
     },
     { merge: true },
   );
+  
   return { ok: true };
 });
 
 export const blockUser = functions.https.onCall(async (data, context) => {
-  assertAdmin(context);
-  const { uid } = data;
+  await assertAdminAsync(context);
+  const { uid, reason } = data;
   if (!uid) throw new functions.https.HttpsError('invalid-argument', 'uid required');
 
-  await db.collection('users').doc(uid).set({ blocked: true, approved: false }, { merge: true });
+  await db.collection('users').doc(uid).set({ 
+    blocked: true, 
+    approved: false,
+    blockedAt: admin.firestore.FieldValue.serverTimestamp(),
+    blockedReason: reason || 'Blocked by administrator'
+  }, { merge: true });
+  
   return { ok: true };
 });
 
 export const setAdminClaim = functions.https.onCall(async (data, context) => {
-  assertAdmin(context);
+  await assertAdminAsync(context);
   const { uid, admin: isAdmin } = data;
   if (!uid || typeof isAdmin !== 'boolean') {
     throw new functions.https.HttpsError('invalid-argument', 'uid and admin flag required');
@@ -256,4 +308,89 @@ export const validateUserAccess = functions.https.onCall(async (data, context) =
     },
   };
 });
+
+// ========== NOTIFICATIONS ==========
+
+/**
+ * Firestore Trigger: Send FCM notification when new announcement is created
+ */
+export const onAnnouncementCreated = functions.firestore
+  .document('announcements/{announcementId}')
+  .onCreate(async (snap, context) => {
+    const announcement = snap.data();
+    const announcementId = context.params.announcementId;
+
+    console.log(`📢 New announcement created: ${announcement.title}`);
+
+    try {
+      // Send to 'all_users' topic
+      const message = {
+        notification: {
+          title: `📢 ${announcement.title}`,
+          body: announcement.description,
+        },
+        data: {
+          type: 'announcement',
+          announcementId: announcementId,
+          announcementType: announcement.type || 'general',
+          actionRequired: announcement.actionRequired?.toString() || 'false',
+        },
+        topic: 'all_users',
+      };
+
+      await admin.messaging().send(message);
+      console.log(`✅ Notification sent to all_users topic`);
+
+      // Also send to announcements topic
+      const announcementsMessage = {
+        ...message,
+        topic: 'announcements',
+      };
+      await admin.messaging().send(announcementsMessage);
+      console.log(`✅ Notification sent to announcements topic`);
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error sending announcement notification:', error);
+      return { success: false, error };
+    }
+  });
+
+/**
+ * Firestore Trigger: Send FCM notification when new chat message is posted
+ */
+export const onChatMessageCreated = functions.firestore
+  .document('chat_messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const message = snap.data();
+
+    // Don't send notification for file-only messages without text
+    if (!message.content || message.content.trim() === '') {
+      return null;
+    }
+
+    try {
+      const notification = {
+        notification: {
+          title: `💬 ${message.senderName}`,
+          body: message.isFile ? '📎 Sent a file' : message.content,
+        },
+        data: {
+          type: 'chat',
+          messageId: context.params.messageId,
+          senderId: message.senderId,
+          senderName: message.senderName,
+        },
+        topic: 'all_users',
+      };
+
+      await admin.messaging().send(notification);
+      console.log(`✅ Chat notification sent for message from ${message.senderName}`);
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error sending chat notification:', error);
+      return { success: false, error };
+    }
+  });
 

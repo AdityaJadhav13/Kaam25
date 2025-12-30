@@ -2,7 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return request.auth != null && request.auth.token.admin == true; }
+    function isAdmin() { 
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; 
+    }
     function isSelf(uid) { return request.auth != null && request.auth.uid == uid; }
     function isApproved() {
       return isSignedIn() && 
@@ -18,9 +22,9 @@ service cloud.firestore {
     }
     
     function onlyUpdatingAllowedFields() {
-      // Users can only update lastLogin field or violation tracking (by self)
+      // Users can only update lastLogin, preferences, or violation tracking (by self)
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      let allowedSelfUpdates = ['lastLogin', 'screenshotAttempts', 'lastViolation', 'violations'];
+      let allowedSelfUpdates = ['lastLogin', 'screenshotAttempts', 'lastViolation', 'violations', 'themePreference', 'notificationsEnabled'];
       return affectedKeys.hasOnly(allowedSelfUpdates);
     }
 

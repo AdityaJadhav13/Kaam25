@@ -27,8 +27,10 @@ class AuthDebugger {
 
   static Future<void> logFirestoreUserState(String uid) async {
     try {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
 
       if (!doc.exists) {
         debugPrint('🔍 Firestore Debug: User document does not exist');

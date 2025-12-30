@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/kaam_avatar.dart';
 import '../../core/widgets/kaam_badge.dart';
 import '../../core/widgets/kaam_button.dart';
+import '../../core/services/notification_service.dart';
 import '../controllers/auth_controller.dart';
+import '../../features/auth/data/user_repository.dart';
 
-class ProfilePage extends ConsumerWidget {
+final userRepositoryProvider = Provider<UserRepository>((ref) {
+  throw UnimplementedError('UserRepository must be provided');
+});
+
+class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends ConsumerState<ProfilePage> {
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final user = auth.user;
 
@@ -131,7 +143,7 @@ class ProfilePage extends ConsumerWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     Text(
-                      'Jan 2024',
+                      DateFormat('MMM yyyy').format(user.createdAt),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
@@ -144,6 +156,60 @@ class ProfilePage extends ConsumerWidget {
           const SizedBox(height: 24),
           Text('Settings', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
+
+          // Notifications Toggle
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.border.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.muted.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.notifications_outlined, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifications',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Receive app notifications',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: user.notificationsEnabled,
+                  onChanged: (value) => _updateNotifications(value),
+                  activeThumbColor: AppColors.primary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Privacy & Security
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -154,105 +220,49 @@ class ProfilePage extends ConsumerWidget {
                 width: 1,
               ),
             ),
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: () => _toast(context, 'Notifications settings (stub)'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.muted.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_outlined,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Notifications',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w500),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Manage notification preferences',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ],
-                    ),
-                  ),
+            child: InkWell(
+              onTap: () => context.push('/profile/privacy-security'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                InkWell(
-                  onTap: () => _toast(context, 'Privacy settings (stub)'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.muted.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.lock_outline, size: 20),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.muted.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(8),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Privacy & Security',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w500),
                           ),
-                          child: const Icon(Icons.lock_outline, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Privacy & Security',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w500),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Access control and security settings',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
-                              ),
-                            ],
+                          const SizedBox(height: 2),
+                          Text(
+                            'Access control and security settings',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.mutedForeground),
                           ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -282,8 +292,29 @@ class ProfilePage extends ConsumerWidget {
       ),
     );
   }
-}
 
-void _toast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _updateNotifications(bool enabled) async {
+    final user = ref.read(authControllerProvider).user;
+    if (user == null) return;
+
+    try {
+      final notificationService = ref.read(notificationServiceProvider);
+      await notificationService.setNotificationsEnabled(enabled);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notifications ${enabled ? "enabled" : "disabled"}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating notifications: $e')),
+        );
+      }
+    }
+  }
 }

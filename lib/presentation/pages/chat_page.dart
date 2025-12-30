@@ -4,11 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/chat_message.dart';
 import '../chat/chat_providers.dart';
+import 'document_viewer_page.dart';
 
 /// Team Chat page with real-time messaging and file attachments
 class ChatPage extends ConsumerStatefulWidget {
@@ -446,11 +446,31 @@ class _MessageBubble extends StatelessWidget {
   final bool isOwn;
   final bool showSender;
 
-  Future<void> _openFile(String url, String? fileName) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> _openFile(
+    BuildContext context,
+    String url,
+    String? fileName,
+  ) async {
+    // Extract file extension from URL or fileName
+    String fileType = 'pdf';
+    if (fileName != null && fileName.contains('.')) {
+      fileType = fileName.split('.').last.toLowerCase();
+    } else if (url.contains('.')) {
+      final urlPath = Uri.parse(url).path;
+      if (urlPath.contains('.')) {
+        fileType = urlPath.split('.').last.toLowerCase();
+      }
     }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => DocumentViewerPage(
+          documentUrl: url,
+          documentName: fileName ?? 'Document',
+          fileType: fileType,
+        ),
+      ),
+    );
   }
 
   @override
@@ -553,8 +573,11 @@ class _MessageBubble extends StatelessWidget {
                     children: [
                       if (message.isFile)
                         InkWell(
-                          onTap: () =>
-                              _openFile(message.content, message.fileName),
+                          onTap: () => _openFile(
+                            context,
+                            message.content,
+                            message.fileName,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
