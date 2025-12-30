@@ -11,6 +11,7 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/device_service.dart';
 import '../../features/auth/data/user_repository.dart';
 import '../../features/auth/domain/app_user.dart';
+import '../../core/utils/auth_debugger.dart';
 import 'auth_state.dart';
 
 class AuthController extends StateNotifier<AuthState> {
@@ -35,31 +36,43 @@ class AuthController extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(busy: true, message: null);
     try {
+      debugPrint('🔐 Attempting email/password sign-in for: $email');
       await authRepository.signInWithEmailPassword(
         email: email,
         password: password,
       );
+      debugPrint('✅ Email/password sign-in successful');
+      AuthDebugger.logAuthState();
     } on FirebaseAuthException catch (e) {
+      AuthDebugger.logAuthError('Email/Password Sign-In', e);
+      final errorMessage = AuthDebugger.getReadableAuthError(e);
+      state = state.copyWith(busy: false, message: errorMessage);
+    } catch (e) {
+      debugPrint('❌ Unexpected error during sign-in: $e');
       state = state.copyWith(
         busy: false,
-        message: e.message ?? 'Sign-in failed',
+        message: 'An unexpected error occurred. Please try again.',
       );
-    } catch (_) {
-      state = state.copyWith(busy: false, message: 'Sign-in failed');
     }
   }
 
   Future<void> loginWithGoogle() async {
     state = state.copyWith(busy: true, message: null);
     try {
+      debugPrint('🔐 Attempting Google sign-in...');
       await authRepository.signInWithGoogle();
+      debugPrint('✅ Google sign-in successful');
+      AuthDebugger.logAuthState();
     } on FirebaseAuthException catch (e) {
+      AuthDebugger.logAuthError('Google Sign-In', e);
+      final errorMessage = AuthDebugger.getReadableAuthError(e);
+      state = state.copyWith(busy: false, message: errorMessage);
+    } catch (e) {
+      debugPrint('❌ Unexpected error during Google sign-in: $e');
       state = state.copyWith(
         busy: false,
-        message: e.message ?? 'Google sign-in failed',
+        message: 'Google sign-in failed. Please try again.',
       );
-    } catch (_) {
-      state = state.copyWith(busy: false, message: 'Google sign-in failed');
     }
   }
 
@@ -110,6 +123,8 @@ class AuthController extends StateNotifier<AuthState> {
       }
 
       debugPrint('✅ User loaded: ${user.email}, role: ${user.role}');
+      AuthDebugger.logFirestoreUserState(user.id);
+      
       final gate = _resolveGate(user: user, deviceId: deviceId);
       debugPrint('✅ Gate resolved: $gate');
 
