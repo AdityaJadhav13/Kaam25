@@ -5,7 +5,8 @@ import '../../data/models/document.dart';
 import 'folders_repository.dart';
 import 'documents_repository.dart';
 
-// Repository providers
+// ─────────────────── REPOSITORY PROVIDERS ───────────────────
+
 final foldersRepositoryProvider = Provider<FoldersRepository>((ref) {
   return FoldersRepository();
 });
@@ -14,27 +15,76 @@ final documentsRepositoryProvider = Provider<DocumentsRepository>((ref) {
   return DocumentsRepository();
 });
 
-// Folders stream provider
+// ─────────────────── FOLDER STREAMS ───────────────────
+
+/// Root-level folders (parentId == null).
+final rootFoldersStreamProvider = StreamProvider<List<Folder>>((ref) {
+  final repository = ref.watch(foldersRepositoryProvider);
+  return repository.watchRootFolders();
+});
+
+/// Sub-folders of a given parent folder.
+final subFoldersStreamProvider = StreamProvider.family<List<Folder>, String>((
+  ref,
+  parentId,
+) {
+  final repository = ref.watch(foldersRepositoryProvider);
+  return repository.watchSubFolders(parentId);
+});
+
+/// All folders (legacy / search).
 final foldersStreamProvider = StreamProvider<List<Folder>>((ref) {
   final repository = ref.watch(foldersRepositoryProvider);
   return repository.watchFolders();
 });
 
-// Documents stream provider for a specific folder
-final documentsStreamProvider =
-    StreamProvider.family<List<Document>, String>((ref, folderId) {
+// ─────────────────── DOCUMENT STREAMS ───────────────────
+
+/// Documents stream for a specific folder.
+final documentsStreamProvider = StreamProvider.family<List<Document>, String>((
+  ref,
+  folderId,
+) {
   final repository = ref.watch(documentsRepositoryProvider);
   return repository.watchDocuments(folderId);
 });
 
-// Document count provider for a specific folder
-final folderDocumentCountProvider =
-    FutureProvider.family<int, String>((ref, folderId) async {
+// ─────────────────── COUNTS ───────────────────
+
+final folderDocumentCountProvider = FutureProvider.family<int, String>((
+  ref,
+  folderId,
+) async {
   final repository = ref.watch(foldersRepositoryProvider);
   return repository.getDocumentCount(folderId);
 });
 
-// Folder controller
+final folderSubFolderCountProvider = FutureProvider.family<int, String>((
+  ref,
+  folderId,
+) async {
+  final repository = ref.watch(foldersRepositoryProvider);
+  return repository.getSubFolderCount(folderId);
+});
+
+// ─────────────────── BREADCRUMB TRAIL ───────────────────
+
+final breadcrumbTrailProvider = FutureProvider.family<List<Folder>, String>((
+  ref,
+  folderId,
+) async {
+  final repository = ref.watch(foldersRepositoryProvider);
+  return repository.getBreadcrumbTrail(folderId);
+});
+
+// ─────────────────── NAVIGATION STATE ───────────────────
+
+/// Tracks the folder navigation stack.
+/// null means we're at the root. A String means we're inside that folder.
+final currentFolderIdProvider = StateProvider<String?>((ref) => null);
+
+// ─────────────────── FOLDER CONTROLLER ───────────────────
+
 class FolderController extends StateNotifier<AsyncValue<void>> {
   FolderController(this._repository) : super(const AsyncValue.data(null));
 
@@ -42,12 +92,14 @@ class FolderController extends StateNotifier<AsyncValue<void>> {
 
   Future<Folder> createFolder({
     required String name,
+    String? parentId,
     String? icon,
   }) async {
     state = const AsyncValue.loading();
     try {
       final folder = await _repository.createFolder(
         name: name,
+        parentId: parentId,
         icon: icon,
       );
       state = const AsyncValue.data(null);
@@ -94,11 +146,12 @@ class FolderController extends StateNotifier<AsyncValue<void>> {
 
 final folderControllerProvider =
     StateNotifierProvider<FolderController, AsyncValue<void>>((ref) {
-  final repository = ref.watch(foldersRepositoryProvider);
-  return FolderController(repository);
-});
+      final repository = ref.watch(foldersRepositoryProvider);
+      return FolderController(repository);
+    });
 
-// Document controller
+// ─────────────────── DOCUMENT CONTROLLER ───────────────────
+
 class DocumentController extends StateNotifier<AsyncValue<void>> {
   DocumentController(this._repository) : super(const AsyncValue.data(null));
 
@@ -120,6 +173,17 @@ class DocumentController extends StateNotifier<AsyncValue<void>> {
       );
       state = const AsyncValue.data(null);
       return document;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> renameDocument(String documentId, String newName) async {
+    state = const AsyncValue.loading();
+    try {
+      await _repository.renameDocument(documentId, newName);
+      state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;
@@ -149,6 +213,6 @@ class DocumentController extends StateNotifier<AsyncValue<void>> {
 
 final documentControllerProvider =
     StateNotifierProvider<DocumentController, AsyncValue<void>>((ref) {
-  final repository = ref.watch(documentsRepositoryProvider);
-  return DocumentController(repository);
-});
+      final repository = ref.watch(documentsRepositoryProvider);
+      return DocumentController(repository);
+    });

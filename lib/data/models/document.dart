@@ -10,6 +10,7 @@ class Document {
     required this.storagePath,
     required this.uploadedBy,
     required this.uploadedAt,
+    this.updatedAt,
     this.downloadUrl,
   });
 
@@ -21,6 +22,7 @@ class Document {
   final String storagePath;
   final String uploadedBy;
   final DateTime uploadedAt;
+  final DateTime? updatedAt;
   final String? downloadUrl;
 
   factory Document.fromFirestore(DocumentSnapshot doc) {
@@ -34,6 +36,9 @@ class Document {
       storagePath: data['storagePath'] as String,
       uploadedBy: data['uploadedBy'] as String,
       uploadedAt: (data['uploadedAt'] as Timestamp).toDate(),
+      updatedAt: data['updatedAt'] != null
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
       downloadUrl: data['downloadUrl'] as String?,
     );
   }
@@ -47,6 +52,7 @@ class Document {
       'storagePath': storagePath,
       'uploadedBy': uploadedBy,
       'uploadedAt': Timestamp.fromDate(uploadedAt),
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'downloadUrl': downloadUrl,
     };
   }
@@ -60,6 +66,7 @@ class Document {
     String? storagePath,
     String? uploadedBy,
     DateTime? uploadedAt,
+    DateTime? updatedAt,
     String? downloadUrl,
   }) {
     return Document(
@@ -71,6 +78,7 @@ class Document {
       storagePath: storagePath ?? this.storagePath,
       uploadedBy: uploadedBy ?? this.uploadedBy,
       uploadedAt: uploadedAt ?? this.uploadedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       downloadUrl: downloadUrl ?? this.downloadUrl,
     );
   }
@@ -82,7 +90,9 @@ class Document {
 
   String get fileSizeFormatted {
     if (fileSize < 1024) return '$fileSize B';
-    if (fileSize < 1024 * 1024) return '${(fileSize / 1024).toStringAsFixed(1)} KB';
+    if (fileSize < 1024 * 1024) {
+      return '${(fileSize / 1024).toStringAsFixed(1)} KB';
+    }
     return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }

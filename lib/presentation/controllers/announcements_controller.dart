@@ -19,7 +19,12 @@ final announcementsRepositoryProvider = Provider<AnnouncementsRepository>((
   );
 });
 
-/// Stream of all announcements (real-time)
+/// Stream of all announcements (real-time from Firestore)
+/// This is the SINGLE SOURCE OF TRUTH for announcements
+/// UI updates automatically when:
+/// - New announcement is created
+/// - Announcement is edited
+/// - User reads an announcement
 final announcementsStreamProvider = StreamProvider<List<Announcement>>((ref) {
   final repository = ref.watch(announcementsRepositoryProvider);
   return repository.watchAnnouncements();
@@ -33,6 +38,7 @@ class AnnouncementsController extends StateNotifier<AsyncValue<void>> {
   final AnnouncementsRepository _repository;
 
   /// Create new announcement
+  /// Writes to Firestore - UI updates automatically via stream
   Future<void> createAnnouncement({
     required String title,
     required String description,
@@ -55,6 +61,7 @@ class AnnouncementsController extends StateNotifier<AsyncValue<void>> {
   }
 
   /// Edit announcement
+  /// Writes to Firestore - UI updates automatically via stream
   Future<void> editAnnouncement({
     required String announcementId,
     String? title,
@@ -75,11 +82,12 @@ class AnnouncementsController extends StateNotifier<AsyncValue<void>> {
   }
 
   /// Mark announcement as read
+  /// Adds current user to readBy array - UI updates automatically
   Future<void> markAsRead(String announcementId) async {
     try {
       await _repository.markAsRead(announcementId);
     } catch (e) {
-      // Silent fail for read tracking
+      // Silent fail for read tracking - don't break UX
     }
   }
 }
@@ -90,7 +98,8 @@ final announcementsControllerProvider =
       return AnnouncementsController(repository);
     });
 
-/// Get unread announcements count for current user
+/// Stream-based unread announcements count for current user
+/// Updates in real-time as announcements are added or marked read
 final unreadAnnouncementsCountProvider = Provider<int>((ref) {
   final announcementsAsync = ref.watch(announcementsStreamProvider);
   final user = FirebaseAuth.instance.currentUser;

@@ -6,7 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_extensions.dart';
+import '../../core/utils/throttled_visibility_detector.dart';
+import '../../core/widgets/seen_by_bottom_sheet.dart';
 import '../../data/models/chat_message.dart';
+import '../../features/auth/domain/app_user.dart';
 import '../chat/chat_providers.dart';
 import 'document_viewer_page.dart';
 
@@ -238,6 +242,24 @@ class _ChatPageState extends ConsumerState<ChatPage>
                         index == 0 ||
                         messages[index - 1].senderId != message.senderId;
 
+                    // Wrap in visibility detector to mark as read when visible
+                    // Only for messages from other users
+                    if (!isOwn && !message.isReadBy(currentUserId ?? '')) {
+                      return ThrottledVisibilityDetector(
+                        key: ValueKey('message_${message.id}'),
+                        onVisible: () {
+                          ref
+                              .read(chatRepositoryProvider)
+                              .markMessageAsRead(message.id);
+                        },
+                        child: _MessageBubble(
+                          message: message,
+                          isOwn: isOwn,
+                          showSender: showSender,
+                        ),
+                      );
+                    }
+
                     return _MessageBubble(
                       message: message,
                       isOwn: isOwn,
@@ -434,8 +456,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
   }
 }
 
-/// Message bubble widget
-class _MessageBubble extends StatelessWidget {
+/// Message bubble widget with read receipts
+class _MessageBubble extends ConsumerWidget {
   const _MessageBubble({
     required this.message,
     required this.isOwn,
@@ -474,200 +496,292 @@ class _MessageBubble extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final currentUserId = ref.watch(currentUserIdProvider);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: isOwn
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isOwn && showSender) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: message.senderRole == UserRole.admin
-                  ? AppColors.danger.withValues(alpha: 0.2)
-                  : AppColors.primary.withValues(alpha: 0.2),
-              child: Text(
-                message.senderName[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: message.senderRole == UserRole.admin
-                      ? AppColors.danger
-                      : AppColors.primary,
+      child: GestureDetector(
+        // Long press to show "Seen By" for own messages
+        onLongPress: isOwn && message.readCount > 0
+            ? () async {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) =>
+                      const Center(child: CircularProgressIndicator()),
+                );
+
+                try {
+                  final repository = ref.read(chatRepositoryProvider);
+                  final readersData = await repository.getMessageReaders(
+                    message.id,
+                  );
+
+                  if (!context.mounted) return;
+                  Navigator.of(context).pop(); // Close loading dialog
+
+                  // Convert to format expected by SeenByBottomSheet
+                  final readers = <String, ({AppUser user, DateTime readAt})>{};
+                  for (final entry in readersData.entries) {
+                    final userId = entry.key;
+                    final user = entry.value;
+                    final readAt = message.readBy[userId] ?? DateTime.now();
+                    readers[userId] = (user: user, readAt: readAt);
+                  }
+
+                  showSeenByBottomSheet(
+                    context: context,
+                    title: 'Message Seen By',
+                    readers: readers,
+                    sortByNewest: true,
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  Navigator.of(context).pop(); // Close loading dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to load readers: $e')),
+                  );
+                }
+              }
+            : null,
+        child: Row(
+          mainAxisAlignment: isOwn
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isOwn && showSender) ...[
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: message.senderRole == UserRole.admin
+                    ? colors.danger.withValues(alpha: 0.2)
+                    : colors.primary.withValues(alpha: 0.2),
+                child: Text(
+                  message.senderName[0].toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: message.senderRole == UserRole.admin
+                        ? colors.danger
+                        : colors.primary,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-          ] else if (!isOwn) ...[
-            const SizedBox(width: 40),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isOwn
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                if (!isOwn && showSender)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12, bottom: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          message.senderName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.mutedForeground,
+              const SizedBox(width: 8),
+            ] else if (!isOwn) ...[
+              const SizedBox(width: 40),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: isOwn
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (!isOwn && showSender)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            message.senderName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colors.mutedForeground,
+                            ),
                           ),
-                        ),
-                        if (message.senderRole == UserRole.admin) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.danger.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'ADMIN',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.danger,
+                          if (message.senderRole == UserRole.admin) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.danger.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'ADMIN',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: colors.danger,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
+                      ),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isOwn
+                          ? colors.ownMessageBackground
+                          : colors.otherMessageBackground.withValues(
+                              alpha: 0.5,
+                            ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: Radius.circular(
+                          isOwn || !showSender ? 16 : 4,
+                        ),
+                        bottomRight: Radius.circular(
+                          isOwn && showSender ? 4 : 16,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (message.isFile)
+                          InkWell(
+                            onTap: () => _openFile(
+                              context,
+                              message.content,
+                              message.fileName,
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isOwn
+                                    ? colors.ownMessageForeground.withValues(
+                                        alpha: 0.2,
+                                      )
+                                    : colors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _getFileIcon(message.fileType),
+                                    color: isOwn
+                                        ? colors.ownMessageForeground
+                                        : colors.primary,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          message.fileName ?? 'File',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: isOwn
+                                                ? colors.ownMessageForeground
+                                                : colors.foreground,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          message.fileType?.toUpperCase() ??
+                                              'FILE',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isOwn
+                                                ? colors.ownMessageForeground
+                                                      .withValues(alpha: 0.7)
+                                                : colors.mutedForeground,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.download,
+                                    color: isOwn
+                                        ? colors.ownMessageForeground
+                                        : colors.primary,
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          SelectableText(
+                            message.content,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: isOwn
+                                  ? colors.ownMessageForeground
+                                  : colors.foreground,
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatTime(message.timestamp),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isOwn
+                                    ? colors.ownMessageForeground.withValues(
+                                        alpha: 0.7,
+                                      )
+                                    : colors.mutedForeground,
+                              ),
+                            ),
+                            // Read receipt indicators (only for own messages)
+                            if (isOwn) ...[
+                              const SizedBox(width: 6),
+                              _buildReadReceipt(colors, currentUserId),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isOwn
-                        ? AppColors.primary
-                        : AppColors.muted.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(
-                        isOwn || !showSender ? 16 : 4,
-                      ),
-                      bottomRight: Radius.circular(
-                        isOwn && showSender ? 4 : 16,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (message.isFile)
-                        InkWell(
-                          onTap: () => _openFile(
-                            context,
-                            message.content,
-                            message.fileName,
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isOwn
-                                  ? Colors.white.withValues(alpha: 0.2)
-                                  : AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getFileIcon(message.fileType),
-                                  color: isOwn
-                                      ? Colors.white
-                                      : AppColors.primary,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        message.fileName ?? 'File',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: isOwn
-                                              ? Colors.white
-                                              : AppColors.foreground,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        message.fileType?.toUpperCase() ??
-                                            'FILE',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: isOwn
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.7,
-                                                )
-                                              : AppColors.mutedForeground,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  Icons.download,
-                                  color: isOwn
-                                      ? Colors.white
-                                      : AppColors.primary,
-                                  size: 20,
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        SelectableText(
-                          message.content,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: isOwn ? Colors.white : AppColors.foreground,
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatTime(message.timestamp),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isOwn
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  /// Build WhatsApp-style read receipt indicator
+  Widget _buildReadReceipt(ThemeColorSet colors, String? currentUserId) {
+    // Don't show read by self
+    final readByOthers = message.readBy.keys
+        .where((uid) => uid != currentUserId)
+        .length;
+
+    if (readByOthers > 0) {
+      // ✓✓ Blue (Read by someone)
+      return Icon(Icons.done_all, size: 16, color: Colors.blue[600]);
+    } else if (message.readBy.isNotEmpty) {
+      // ✓✓ Grey (Delivered, only read by self - shouldn't happen often)
+      return Icon(
+        Icons.done_all,
+        size: 16,
+        color: colors.ownMessageForeground.withValues(alpha: 0.5),
+      );
+    } else {
+      // ✓ Grey (Sent, not yet delivered)
+      return Icon(
+        Icons.done,
+        size: 16,
+        color: colors.ownMessageForeground.withValues(alpha: 0.5),
+      );
+    }
   }
 
   IconData _getFileIcon(String? fileType) {

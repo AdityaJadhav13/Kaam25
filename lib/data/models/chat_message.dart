@@ -34,6 +34,7 @@ class ChatMessage {
     this.fileName,
     this.fileType, // pdf, image, docx, etc
     required this.timestamp,
+    this.readBy = const {}, // Map of userId -> timestamp when read
   });
 
   final String id;
@@ -45,6 +46,7 @@ class ChatMessage {
   final String? fileName;
   final String? fileType;
   final DateTime timestamp;
+  final Map<String, DateTime> readBy; // userId -> first read timestamp
 
   /// Check if message is from current user
   bool isOwnMessage(String currentUserId) => senderId == currentUserId;
@@ -55,15 +57,36 @@ class ChatMessage {
   /// Check if message is text
   bool get isText => messageType == MessageType.text;
 
+  /// Check if message has been read by a user
+  bool isReadBy(String userId) => readBy.containsKey(userId);
+
+  /// Get count of users who read this message
+  int get readCount => readBy.length;
+
+  /// Check if delivered (at least one person other than sender read it)
+  bool get isDelivered => readBy.isNotEmpty;
+
+  /// Check if read by anyone other than sender
+  bool isReadByOthers(String currentUserId) {
+    return readBy.keys.any((uid) => uid != currentUserId);
+  }
+
   /// Create from Firestore document
   factory ChatMessage.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? <String, dynamic>{};
-    
+
+    // Parse readBy map from Firestore
+    final readByData = data['readBy'] as Map<String, dynamic>? ?? {};
+    final readByMap = <String, DateTime>{};
+    readByData.forEach((userId, timestamp) {
+      readByMap[userId] = _asDate(timestamp);
+    });
+
     return ChatMessage(
       id: doc.id,
       senderId: data['senderId'] as String? ?? '',
       senderName: data['senderName'] as String? ?? 'Unknown',
-      senderRole: data['senderRole'] != null 
+      senderRole: data['senderRole'] != null
           ? UserRole.fromJson(data['senderRole'] as String)
           : UserRole.member,
       messageType: data['messageType'] != null
@@ -73,10 +96,12 @@ class ChatMessage {
       fileName: data['fileName'] as String?,
       fileType: data['fileType'] as String?,
       timestamp: _asDate(data['createdAt'] ?? data['timestamp']),
+      readBy: readByMap,
     );
   }
 
   /// Convert to Firestore map
+  /// Note: readBy is NOT included here - it's updated separately via markAsRead()
   Map<String, dynamic> toMap() {
     return {
       'senderId': senderId,
@@ -87,6 +112,8 @@ class ChatMessage {
       if (fileName != null) 'fileName': fileName,
       if (fileType != null) 'fileType': fileType,
       'createdAt': FieldValue.serverTimestamp(),
+      // readBy is initialized as empty map on creation
+      'readBy': {},
     };
   }
 

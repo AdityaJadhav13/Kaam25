@@ -1,114 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'dart:io';
-
-import 'core/theme/app_theme.dart';
-import 'firebase_options.dart';
-import 'presentation/controllers/app_router.dart';
-import 'core/services/screen_security_service.dart';
-import 'core/services/presence_service.dart';
-import 'core/services/notification_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'core/services/notification_service.dart';
+import 'core/theme/app_theme.dart';
+import 'core/controllers/theme_controller.dart';
+import 'firebase_options.dart';
+import 'presentation/controllers/app_router.dart';
+
+/// Simplified main.dart - Reset for clean slate
+/// Only Firebase initialization is kept
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Initialize Firebase only
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Initialize screen security service
-    final screenSecurity = ScreenSecurityService(
-      FirebaseFirestore.instance,
-      FirebaseAuth.instance,
-    );
-    await screenSecurity.initialize();
+    // Register top-level background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    // Initialize presence service
-    final presenceService = PresenceService(
-      FirebaseFirestore.instance,
-      FirebaseAuth.instance,
-    );
-    presenceService.setupLifecycleTracking();
-
-    // Initialize notification service
-    final notificationService = NotificationService(
-      FirebaseFirestore.instance,
-      FirebaseAuth.instance,
-      FirebaseMessaging.instance,
-    );
-    await notificationService.initialize();
-
-    // Set user online when app starts
-    if (FirebaseAuth.instance.currentUser != null) {
-      await presenceService.goOnline();
-    }
-
-    runApp(
-      ProviderScope(
-        overrides: [
-          screenSecurityServiceProvider.overrideWithValue(screenSecurity),
-          presenceServiceProvider.overrideWithValue(presenceService),
-          notificationServiceProvider.overrideWithValue(notificationService),
-        ],
-        child: const Kaam25App(),
-      ),
-    );
+    runApp(const ProviderScope(child: Kaam25App()));
   } catch (e) {
     runApp(_InitErrorApp(error: e.toString()));
   }
 }
 
-// Provider for screen security service
-final screenSecurityServiceProvider = Provider<ScreenSecurityService>((ref) {
-  throw UnimplementedError('ScreenSecurityService must be overridden in main');
-});
-
-// Provider for presence service
-final presenceServiceProvider = Provider<PresenceService>((ref) {
-  throw UnimplementedError('PresenceService must be overridden in main');
-});
-
-class Kaam25App extends ConsumerStatefulWidget {
+class Kaam25App extends ConsumerWidget {
   const Kaam25App({super.key});
 
   @override
-  ConsumerState<Kaam25App> createState() => _Kaam25AppState();
-}
-
-class _Kaam25AppState extends ConsumerState<Kaam25App> {
-  @override
-  void initState() {
-    super.initState();
-
-    // Set up iOS screenshot detection listener
-    if (Platform.isIOS) {
-      // Note: screen_protector package will detect screenshots automatically
-      // when protectDataLeakageOn() is called
-      // The detection happens through the ScreenProtector.preventScreenshotOn() method
-      // which is already called in ScreenSecurityService.initialize()
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
       routerConfig: router,
     );
-  }
-
-  @override
-  void dispose() {
-    ref.read(screenSecurityServiceProvider).dispose();
-    super.dispose();
   }
 }
 

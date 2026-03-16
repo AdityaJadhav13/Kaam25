@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/kaam_button.dart';
-import '../controllers/auth_controller.dart';
 import '../controllers/onboarding_provider.dart';
 import '../widgets/content_max_width.dart';
 
@@ -53,9 +52,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _complete() async {
-    // Sign out any existing session to ensure clean login flow
-    await ref.read(authControllerProvider.notifier).logout();
-    ref.read(hasSeenOnboardingProvider.notifier).state = true;
+    // Mark onboarding as seen - DO NOT logout user!
+    // Firebase Auth persists login state automatically
+    // User should proceed to login if not authenticated, or app if authenticated
+    await ref.read(hasSeenOnboardingProvider.notifier).markSeen();
   }
 
   void _next() {

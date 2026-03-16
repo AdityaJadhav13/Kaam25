@@ -1,0 +1,10 @@
+{
+  "root": true,
+  "extends": ["google"],
+  "parserOptions": {
+    "ecmaVersion": 2022
+  },
+  "rules": {
+    "max-len": ["error", { "code": 120 }]
+  }
+}

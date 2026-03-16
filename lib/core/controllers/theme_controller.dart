@@ -11,7 +11,7 @@ final themeModeProvider = StateNotifierProvider<ThemeController, ThemeMode>((
 });
 
 class ThemeController extends StateNotifier<ThemeMode> {
-  ThemeController(this._firestore, this._auth) : super(ThemeMode.system) {
+  ThemeController(this._firestore, this._auth) : super(ThemeMode.light) {
     _initialize();
   }
 
@@ -25,8 +25,7 @@ class ThemeController extends StateNotifier<ThemeMode> {
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists) {
-        final preference =
-            doc.data()?['themePreference'] as String? ?? 'system';
+        final preference = doc.data()?['themePreference'] as String? ?? 'light';
         state = _themeFromString(preference);
       }
     } catch (e) {
@@ -61,8 +60,10 @@ class ThemeController extends StateNotifier<ThemeMode> {
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
-      default:
+      case 'system':
         return ThemeMode.system;
+      default:
+        return ThemeMode.light; // Default to light theme
     }
   }
 

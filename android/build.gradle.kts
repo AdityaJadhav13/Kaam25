@@ -16,7 +16,11 @@ allprojects {
     
     // Apply to all projects immediately
     tasks.withType<JavaCompile> {
-        options.compilerArgs.addAll(listOf("-Xlint:-options", "-Xlint:-deprecation"))
+        options.compilerArgs.addAll(listOf(
+            "-Xlint:-deprecation",
+            "-Xlint:-options",
+            "-Xlint:unchecked"
+        ))
         sourceCompatibility = "17"
         targetCompatibility = "17"
     }
@@ -34,7 +38,11 @@ subprojects {
     
     afterEvaluate {
         tasks.withType<JavaCompile> {
-            options.compilerArgs.addAll(listOf("-Xlint:-options", "-Xlint:-deprecation"))
+            options.compilerArgs.addAll(listOf(
+                "-Xlint:-deprecation",
+                "-Xlint:-options",
+                "-Xlint:unchecked"
+            ))
             sourceCompatibility = "17"
             targetCompatibility = "17"
         }

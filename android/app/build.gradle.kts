@@ -37,8 +37,8 @@ android {
         applicationId = "com.kaam25.kaam25"
         minSdk = flutter.minSdkVersion  // Required for Firebase and modern features
         targetSdk = flutter.targetSdkVersion
-        versionCode = 90
-        versionName = "0.90"
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
         multiDexEnabled = true  // Required for Firebase
     }
 
@@ -52,6 +52,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
@@ -62,7 +65,11 @@ android {
 
 // Suppress deprecation warnings from dependencies
 tasks.withType<JavaCompile> {
-    options.compilerArgs.addAll(listOf("-Xlint:-deprecation", "-Xlint:-options"))
+    options.compilerArgs.addAll(listOf(
+        "-Xlint:-deprecation",
+        "-Xlint:-options",
+        "-Xlint:unchecked"
+    ))
 }
 
 flutter {

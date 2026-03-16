@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'enums.dart';
 
 /// Announcement model with Firestore integration
+///
+/// ARCHITECTURE:
+/// - Announcements are global (visible to all approved users)
+/// - readBy array tracks which users have read each announcement
+/// - Timestamps use server time for consistency
 class Announcement {
   const Announcement({
     required this.id,
@@ -26,11 +31,17 @@ class Announcement {
   final String createdByName;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final List<String> readBy; // List of userIds who have read this
+  final Map<String, DateTime> readBy; // userId -> timestamp when read
   final List<AnnouncementAttachment>? attachments;
 
   // UI helpers
-  bool isReadBy(String userId) => readBy.contains(userId);
+  bool isReadBy(String userId) => readBy.containsKey(userId);
+
+  /// Get count of users who read this announcement
+  int get readCount => readBy.length;
+
+  /// Get list of user IDs who read (for backward compatibility)
+  List<String> get readByList => readBy.keys.toList();
 
   // Backward compatibility with old UI
   String get authorId => createdBy;
@@ -44,7 +55,7 @@ class Announcement {
     AnnouncementType? type,
     bool? actionRequired,
     DateTime? updatedAt,
-    List<String>? readBy,
+    Map<String, DateTime>? readBy,
     List<AnnouncementAttachment>? attachments,
   }) {
     return Announcement(
@@ -63,6 +74,12 @@ class Announcement {
   }
 
   Map<String, dynamic> toMap() {
+    // Convert readBy map to Firestore-compatible format
+    final readByFirestore = <String, dynamic>{};
+    readBy.forEach((userId, timestamp) {
+      readByFirestore[userId] = Timestamp.fromDate(timestamp);
+    });
+
     return {
       'title': title,
       'description': description,
@@ -72,7 +89,7 @@ class Announcement {
       'createdByName': createdByName,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
-      'readBy': readBy,
+      'readBy': readByFirestore,
       if (attachments != null)
         'attachments': attachments!.map((a) => a.toMap()).toList(),
     };
@@ -80,20 +97,46 @@ class Announcement {
 
   factory Announcement.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Handle timestamps that might be null (pending server timestamp)
+    // or already be Timestamp objects
+    DateTime parseTimestamp(dynamic value) {
+      if (value == null) return DateTime.now();
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      return DateTime.now();
+    }
+
+    // Parse readBy map from Firestore
+    final readByData = data['readBy'];
+    final readByMap = <String, DateTime>{};
+
+    if (readByData is Map<String, dynamic>) {
+      // New format: Map<String, Timestamp>
+      readByData.forEach((userId, timestamp) {
+        readByMap[userId] = parseTimestamp(timestamp);
+      });
+    } else if (readByData is List) {
+      // Legacy format: List<String> - convert to map with current time
+      for (final userId in readByData) {
+        readByMap[userId as String] = DateTime.now();
+      }
+    }
+
     return Announcement(
       id: doc.id,
-      title: data['title'] as String,
-      description: data['description'] as String,
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
       type: AnnouncementType.values.firstWhere(
         (t) => t.name == data['type'],
         orElse: () => AnnouncementType.normal,
       ),
       actionRequired: data['actionRequired'] as bool? ?? false,
-      createdBy: data['createdBy'] as String,
-      createdByName: data['createdByName'] as String,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-      readBy: (data['readBy'] as List<dynamic>?)?.cast<String>() ?? [],
+      createdBy: data['createdBy'] as String? ?? '',
+      createdByName: data['createdByName'] as String? ?? 'Unknown',
+      createdAt: parseTimestamp(data['createdAt']),
+      updatedAt: parseTimestamp(data['updatedAt']),
+      readBy: readByMap,
       attachments: (data['attachments'] as List<dynamic>?)
           ?.map(
             (a) => AnnouncementAttachment.fromMap(a as Map<String, dynamic>),

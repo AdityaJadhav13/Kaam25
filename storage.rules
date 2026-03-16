@@ -10,19 +10,23 @@ service firebase.storage {
     function isApproved() {
       return isSignedIn() && 
              firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.approved == true &&
-             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.blocked == false;
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.blocked != true;
     }
     
-    // Documents folder - all approved users can read/write
-    match /documents/{folderId}/{fileName} {
-      // Allow read if user is approved
+    // NEW: fileId-based storage paths (files/{fileId}/{fileName})
+    // This decouples storage from folder names — renames never break paths.
+    match /files/{fileId}/{fileName} {
       allow read: if isApproved();
-      
-      // Allow write if user is approved (upload/update)
       allow write: if isApproved() && 
                    request.resource.size < 50 * 1024 * 1024; // Max 50MB
-      
-      // Allow delete if user is approved
+      allow delete: if isApproved();
+    }
+
+    // LEGACY: folder-name-based paths — kept for backward compatibility
+    match /documents/{folderId}/{fileName} {
+      allow read: if isApproved();
+      allow write: if isApproved() && 
+                   request.resource.size < 50 * 1024 * 1024; // Max 50MB
       allow delete: if isApproved();
     }
 

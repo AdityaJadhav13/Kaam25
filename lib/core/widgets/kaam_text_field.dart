@@ -8,6 +8,7 @@ class KaamTextField extends StatelessWidget {
     this.leadingIcon,
     this.obscureText = false,
     this.keyboardType,
+    this.onChanged,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class KaamTextField extends StatelessWidget {
   final IconData? leadingIcon;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +26,7 @@ class KaamTextField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hintText,
         prefixIcon: leadingIcon == null ? null : Icon(leadingIcon, size: 20),
@@ -35,10 +38,7 @@ class KaamTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          labelText!,
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
+        Text(labelText!, style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 8),
         field,
       ],

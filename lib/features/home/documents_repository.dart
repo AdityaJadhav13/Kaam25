@@ -41,20 +41,20 @@ class DocumentsRepository {
     'csv',
   ];
 
-  /// Get real-time stream of documents in a folder
+  // ────────────────────────── STREAMS ──────────────────────────
+
+  /// Get real-time stream of documents in a folder.
   Stream<List<Document>> watchDocuments(String folderId) {
     return _documentsCollection
         .where('folderId', isEqualTo: folderId)
         .orderBy('uploadedAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => Document.fromFirestore(doc))
-              .toList();
-        });
+        .map((s) => s.docs.map((d) => Document.fromFirestore(d)).toList());
   }
 
-  /// Get a single document by ID
+  // ────────────────────────── READS ──────────────────────────
+
+  /// Get a single document by ID.
   Future<Document?> getDocument(String documentId) async {
     try {
       final doc = await _documentsCollection.doc(documentId).get();
@@ -66,7 +66,12 @@ class DocumentsRepository {
     }
   }
 
-  /// Upload a document to Firebase Storage and save metadata to Firestore
+  // ────────────────────────── UPLOAD ──────────────────────────
+
+  /// Upload a document to Firebase Storage and save metadata to Firestore.
+  ///
+  /// Storage path is **fileId-based** (`files/{fileId}/original`) so that
+  /// renaming the file or its parent folder never breaks the path.
   Future<Document> uploadDocument({
     required String folderId,
     required File file,
@@ -74,9 +79,7 @@ class DocumentsRepository {
     void Function(double progress)? onProgress,
   }) async {
     final userId = _auth.currentUser?.uid;
-    if (userId == null) {
-      throw Exception('User not authenticated');
-    }
+    if (userId == null) throw Exception('User not authenticated');
 
     // Validate file size
     final fileSize = await file.length();
@@ -96,9 +99,12 @@ class DocumentsRepository {
     }
 
     try {
-      // Generate unique storage path
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final storagePath = 'documents/$folderId/${timestamp}_$fileName';
+      // Generate a Firestore doc first so we have the ID for the storage path.
+      final docRef = _documentsCollection.doc();
+      final fileId = docRef.id;
+
+      // ── STORAGE PATH: fileId-based, never folder-name-based ──
+      final storagePath = 'files/$fileId/original';
 
       // Upload to Firebase Storage
       final storageRef = _storage.ref().child(storagePath);
@@ -111,36 +117,35 @@ class DocumentsRepository {
       });
 
       final snapshot = await uploadTask;
-
       if (snapshot.state != TaskState.success) {
         throw Exception('Upload failed');
       }
 
-      // Get download URL
+      // Get download URL (internal use only — never exposed publicly)
       final downloadUrl = await storageRef.getDownloadURL();
 
-      // Save metadata to Firestore
-      final docRef = _documentsCollection.doc();
+      final now = DateTime.now();
       final document = Document(
-        id: docRef.id,
+        id: fileId,
         folderId: folderId,
         fileName: fileName,
         fileType: extension,
         fileSize: fileSize,
         storagePath: storagePath,
         uploadedBy: userId,
-        uploadedAt: DateTime.now(),
+        uploadedAt: now,
+        updatedAt: now,
         downloadUrl: downloadUrl,
       );
 
       await docRef.set(document.toFirestore());
 
-      // Update folder's updatedAt timestamp
+      // Touch parent folder
       await _firestore.collection('folders').doc(folderId).update({
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ Document uploaded: ${document.id}');
+      debugPrint('✅ Document uploaded: $fileId (storage=$storagePath)');
       return document;
     } catch (e) {
       debugPrint('❌ Error uploading document: $e');
@@ -148,13 +153,35 @@ class DocumentsRepository {
     }
   }
 
-  /// Delete a document (removes from Storage and Firestore)
+  // ────────────────────────── RENAME ──────────────────────────
+
+  /// Rename a document — updates ONLY metadata. Storage path is untouched.
+  Future<void> renameDocument(String documentId, String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) throw Exception('File name cannot be empty');
+    if (trimmed.length > 200) {
+      throw Exception('File name too long (max 200 characters)');
+    }
+
+    try {
+      await _documentsCollection.doc(documentId).update({
+        'fileName': trimmed,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('✅ Document renamed: $documentId → $trimmed');
+    } catch (e) {
+      debugPrint('❌ Error renaming document: $e');
+      rethrow;
+    }
+  }
+
+  // ────────────────────────── DELETE ──────────────────────────
+
+  /// Delete a document (removes from Storage and Firestore).
   Future<void> deleteDocument(String documentId) async {
     try {
       final doc = await getDocument(documentId);
-      if (doc == null) {
-        throw Exception('Document not found');
-      }
+      if (doc == null) throw Exception('Document not found');
 
       // Delete from Storage
       try {
@@ -167,7 +194,7 @@ class DocumentsRepository {
       // Delete from Firestore
       await _documentsCollection.doc(documentId).delete();
 
-      // Update folder's updatedAt timestamp
+      // Touch parent folder
       await _firestore.collection('folders').doc(doc.folderId).update({
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -179,26 +206,21 @@ class DocumentsRepository {
     }
   }
 
-  /// Get download URL for a document
+  // ────────────────────────── URL ──────────────────────────
+
+  /// Get download URL for a document (internal use only).
   Future<String> getDownloadUrl(String documentId) async {
     try {
       final doc = await getDocument(documentId);
-      if (doc == null) {
-        throw Exception('Document not found');
-      }
+      if (doc == null) throw Exception('Document not found');
 
-      // If we have a cached download URL, return it
-      if (doc.downloadUrl != null) {
-        return doc.downloadUrl!;
-      }
+      if (doc.downloadUrl != null) return doc.downloadUrl!;
 
-      // Otherwise, fetch from Storage
       final storageRef = _storage.ref().child(doc.storagePath);
       final url = await storageRef.getDownloadURL();
 
-      // Cache the URL in Firestore
+      // Cache the URL
       await _documentsCollection.doc(documentId).update({'downloadUrl': url});
-
       return url;
     } catch (e) {
       debugPrint('❌ Error getting download URL: $e');
@@ -206,7 +228,9 @@ class DocumentsRepository {
     }
   }
 
-  /// Check if file type is supported
+  // ────────────────────────── HELPERS ──────────────────────────
+
+  /// Check if file type is supported.
   static bool isFileTypeSupported(String fileName) {
     final extension = path
         .extension(fileName)
@@ -215,13 +239,12 @@ class DocumentsRepository {
     return supportedExtensions.contains(extension);
   }
 
-  /// Get file icon based on extension
+  /// Get emoji icon for a file type.
   static String getFileIcon(String fileName) {
     final extension = path
         .extension(fileName)
         .toLowerCase()
         .replaceAll('.', '');
-
     switch (extension) {
       case 'pdf':
         return '📄';

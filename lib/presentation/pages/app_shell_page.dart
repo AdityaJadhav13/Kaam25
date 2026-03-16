@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/widgets/kaam_badge.dart';
 import '../controllers/announcements_controller.dart';
 import '../controllers/main_nav_controller.dart';
@@ -10,11 +11,73 @@ import 'chat_page.dart';
 import 'home_page.dart';
 import 'profile_page.dart';
 
-class AppShellPage extends ConsumerWidget {
-  const AppShellPage({super.key});
+class AppShellPage extends ConsumerStatefulWidget {
+  const AppShellPage({super.key, this.initialTab, this.initialFolderId});
+
+  /// Tab name from notification deep link: 'chat', 'announcements', 'profile'
+  final String? initialTab;
+
+  /// Folder ID to navigate to from file/folder notifications
+  final String? initialFolderId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShellPage> createState() => _AppShellPageState();
+}
+
+class _AppShellPageState extends ConsumerState<AppShellPage> {
+  bool _notificationsInitialized = false;
+  bool _deepLinkHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize notifications after build completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initNotifications();
+      _handleDeepLink();
+    });
+  }
+
+  Future<void> _initNotifications() async {
+    if (_notificationsInitialized) return;
+    _notificationsInitialized = true;
+
+    final notificationService = ref.read(notificationServiceProvider);
+    await notificationService.initialize();
+  }
+
+  void _handleDeepLink() {
+    if (_deepLinkHandled) return;
+    _deepLinkHandled = true;
+
+    // Handle tab deep link
+    final tab = widget.initialTab;
+    if (tab != null) {
+      switch (tab) {
+        case 'chat':
+          ref.read(mainTabProvider.notifier).state = MainTab.chat;
+          break;
+        case 'announcements':
+          ref.read(mainTabProvider.notifier).state = MainTab.announcements;
+          break;
+        case 'profile':
+          ref.read(mainTabProvider.notifier).state = MainTab.profile;
+          break;
+        default:
+          ref.read(mainTabProvider.notifier).state = MainTab.home;
+      }
+    }
+
+    // Handle folderId deep link — set home tab + navigate into folder
+    if (widget.initialFolderId != null) {
+      ref.read(mainTabProvider.notifier).state = MainTab.home;
+      // The HomePage watches its own folder navigation state
+      // TODO: integrate with folder navigation provider if needed
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tab = ref.watch(mainTabProvider);
     final uploads = ref.watch(uploadsControllerProvider).uploads;
 
@@ -22,76 +85,78 @@ class AppShellPage extends ConsumerWidget {
     final unreadAnnouncements = ref.watch(unreadAnnouncementsCountProvider);
     const unreadChat = 0; // TODO: Implement chat unread count
 
-    return Stack(
-      children: [
-        Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                // Stories removed
-                const Divider(height: 1),
-                Expanded(
-                  child: switch (tab) {
-                    MainTab.home => const HomePage(),
-                    MainTab.chat => const ChatPage(),
-                    MainTab.announcements => const AnnouncementsPage(),
-                    MainTab.profile => const ProfilePage(),
-                  },
-                ),
-                const Divider(height: 1),
-                NavigationBar(
-                  selectedIndex: tab.index,
-                  onDestinationSelected: (i) {
-                    ref.read(mainTabProvider.notifier).state =
-                        MainTab.values[i];
-                  },
-                  destinations: [
-                    const NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    NavigationDestination(
-                      icon: _BadgeIcon(
-                        icon: Icons.chat_bubble_outline,
-                        badgeCount: unreadChat,
+    return NotificationBannerOverlay(
+      child: Stack(
+        children: [
+          Scaffold(
+            body: SafeArea(
+              child: Column(
+                children: [
+                  // Stories removed
+                  const Divider(height: 1),
+                  Expanded(
+                    child: switch (tab) {
+                      MainTab.home => const HomePage(),
+                      MainTab.chat => const ChatPage(),
+                      MainTab.announcements => const AnnouncementsPage(),
+                      MainTab.profile => const ProfilePage(),
+                    },
+                  ),
+                  const Divider(height: 1),
+                  NavigationBar(
+                    selectedIndex: tab.index,
+                    onDestinationSelected: (i) {
+                      ref.read(mainTabProvider.notifier).state =
+                          MainTab.values[i];
+                    },
+                    destinations: [
+                      const NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home),
+                        label: 'Home',
                       ),
-                      selectedIcon: _BadgeIcon(
-                        icon: Icons.chat_bubble,
-                        badgeCount: unreadChat,
+                      NavigationDestination(
+                        icon: _BadgeIcon(
+                          icon: Icons.chat_bubble_outline,
+                          badgeCount: unreadChat,
+                        ),
+                        selectedIcon: _BadgeIcon(
+                          icon: Icons.chat_bubble,
+                          badgeCount: unreadChat,
+                        ),
+                        label: 'Chat',
                       ),
-                      label: 'Chat',
-                    ),
-                    NavigationDestination(
-                      icon: _BadgeIcon(
-                        icon: Icons.notifications_none,
-                        badgeCount: unreadAnnouncements,
+                      NavigationDestination(
+                        icon: _BadgeIcon(
+                          icon: Icons.notifications_none,
+                          badgeCount: unreadAnnouncements,
+                        ),
+                        selectedIcon: _BadgeIcon(
+                          icon: Icons.notifications,
+                          badgeCount: unreadAnnouncements,
+                        ),
+                        label: 'Announcements',
                       ),
-                      selectedIcon: _BadgeIcon(
-                        icon: Icons.notifications,
-                        badgeCount: unreadAnnouncements,
+                      const NavigationDestination(
+                        icon: Icon(Icons.person_outline),
+                        selectedIcon: Icon(Icons.person),
+                        label: 'Profile',
                       ),
-                      label: 'Announcements',
-                    ),
-                    const NavigationDestination(
-                      icon: Icon(Icons.person_outline),
-                      selectedIcon: Icon(Icons.person),
-                      label: 'Profile',
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        UploadProgressPanel(
-          uploads: uploads,
-          onCancel: (id) =>
-              ref.read(uploadsControllerProvider.notifier).cancelUpload(id),
-          onDismiss: (id) =>
-              ref.read(uploadsControllerProvider.notifier).dismissUpload(id),
-        ),
-      ],
+          UploadProgressPanel(
+            uploads: uploads,
+            onCancel: (id) =>
+                ref.read(uploadsControllerProvider.notifier).cancelUpload(id),
+            onDismiss: (id) =>
+                ref.read(uploadsControllerProvider.notifier).dismissUpload(id),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view.dart';
 
+import '../../core/theme/theme_extensions.dart';
+
 /// In-app document viewer for PDFs and images
 class DocumentViewerPage extends StatefulWidget {
   const DocumentViewerPage({
@@ -68,17 +70,19 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
   }
 
   Widget _buildViewer() {
+    final colors = context.colors;
+
     if (_localPath == null) {
       return const Center(child: Text('No file loaded'));
     }
 
     final extension = widget.fileType.toLowerCase();
 
-    // Image viewer
+    // Image viewer - keep dark background for image viewing
     if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension)) {
       return PhotoView(
         imageProvider: FileImage(File(_localPath!)),
-        backgroundDecoration: const BoxDecoration(color: Colors.black),
+        backgroundDecoration: BoxDecoration(color: colors.background),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 2,
         enableRotation: true,
@@ -94,11 +98,11 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                Icon(Icons.error_outline, size: 48, color: colors.danger),
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load image',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: colors.foreground),
                 ),
               ],
             ),
@@ -156,13 +160,14 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
+                    color: colors.cardElevated.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: colors.border),
                   ),
                   child: Text(
                     'Page ${_currentPage + 1} of $_totalPages',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: colors.foreground,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -179,7 +184,7 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.description, size: 64, color: Colors.grey),
+          Icon(Icons.description, size: 64, color: colors.mutedForeground),
           const SizedBox(height: 16),
           Text(
             'Preview not available',
@@ -190,7 +195,7 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
             'This file type (.$extension) cannot be previewed in-app',
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+            ).textTheme.bodyMedium?.copyWith(color: colors.mutedForeground),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -206,6 +211,8 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.documentName, overflow: TextOverflow.ellipsis),
@@ -235,11 +242,7 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
-                    ),
+                    Icon(Icons.error_outline, size: 64, color: colors.danger),
                     const SizedBox(height: 16),
                     Text(
                       'Error',

@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "388870218082-n6abfsub64gjgdk01nb4aiqt25q6kmnc.apps.googleusercontent.com",
+          "client_id": "388870218082-vgoip6j2tmsmnmefs937rfofia3c04t0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.kaam25.kaam25",
-            "certificate_hash": "d3184508ee89f83e633556ded844c6d6f5a19510"
+            "certificate_hash": "f15ed640a02585bd2ee8cbb64b2cac6e179001fa"
           }
         },
         {

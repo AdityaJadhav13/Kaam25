@@ -6,6 +6,13 @@ import '../../core/widgets/kaam_button.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/content_max_width.dart';
 
+/// DevicePendingPage - Shown when user is approved but THIS device is not
+///
+/// KEY BEHAVIOR:
+/// - User remains logged in (Firebase Auth session persists)
+/// - User stays on this screen until admin approves the device
+/// - When admin approves device, AuthController's Firestore stream detects the change
+/// - Router automatically navigates to /app without user action
 class DevicePendingPage extends ConsumerWidget {
   const DevicePendingPage({super.key});
 
@@ -44,6 +51,44 @@ class DevicePendingPage extends ConsumerWidget {
                   style: TextStyle(color: AppColors.mutedForeground),
                 ),
                 const SizedBox(height: 18),
+
+                // Real-time status indicator
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Waiting for device approval...\nThis page will update automatically when approved.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue[800],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -79,13 +124,21 @@ class DevicePendingPage extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 24),
                 KaamButton(
                   variant: KaamButtonVariant.outline,
                   size: KaamButtonSize.lg,
                   onPressed: () =>
                       ref.read(authControllerProvider.notifier).logout(),
                   child: const Text('Sign Out'),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Sign out if you want to use a different account',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),

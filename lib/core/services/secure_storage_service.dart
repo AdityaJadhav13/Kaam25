@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 /// Secure storage service using platform-specific secure storage
 /// - Android: Uses Android Keystore
@@ -6,12 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// - Never stores sensitive data in plain text
 class SecureStorageService {
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
 
   // Keys
@@ -60,9 +57,28 @@ class SecureStorageService {
     return await _storage.read(key: _keyUserEmail);
   }
 
+  /// Get or create a stable device ID (persists across app restarts)
+  /// Uses UUID v4 for uniqueness, stored securely
+  Future<String> getOrCreateDeviceId() async {
+    String? deviceId = await _storage.read(key: _keyDeviceId);
+    if (deviceId == null || deviceId.isEmpty) {
+      // Generate new stable UUID for this device
+      deviceId = const Uuid().v4();
+      await _storage.write(key: _keyDeviceId, value: deviceId);
+    }
+    return deviceId;
+  }
+
   /// Clear all stored data (on logout)
+  /// NOTE: Does NOT clear device ID - device ID persists across logouts
   Future<void> clearAll() async {
+    // Preserve device ID across logouts
+    final deviceId = await _storage.read(key: _keyDeviceId);
     await _storage.deleteAll();
+    // Restore device ID
+    if (deviceId != null) {
+      await _storage.write(key: _keyDeviceId, value: deviceId);
+    }
   }
 
   /// Clear specific key

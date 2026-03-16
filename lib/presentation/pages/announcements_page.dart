@@ -3,14 +3,15 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/kaam_badge.dart';
 import '../../core/widgets/kaam_button.dart';
+import '../../core/widgets/seen_by_bottom_sheet.dart';
 import '../../data/models/announcement.dart';
 import '../../data/models/enums.dart';
 import '../controllers/announcements_controller.dart';
-import '../controllers/auth_controller.dart';
 import 'document_viewer_page.dart';
 
 class AnnouncementsPage extends ConsumerStatefulWidget {
@@ -105,8 +106,7 @@ class _AnnouncementsList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authControllerProvider);
-    final userId = auth.user?.id;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
 
     return Column(
       children: [
@@ -323,8 +323,7 @@ class _AnnouncementDetail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authControllerProvider);
-    final userId = auth.user?.id;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
     final isRead = userId != null && announcement.isReadBy(userId);
 
     return Column(
@@ -346,7 +345,8 @@ class _AnnouncementDetail extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              if (auth.user != null)
+              if (FirebaseAuth.instance.currentUser !=
+                  null) // Temp during reset
                 KaamButton(
                   onPressed: () => _showEditDialog(context, announcement),
                   variant: KaamButtonVariant.ghost,
@@ -456,6 +456,108 @@ class _AnnouncementDetail extends ConsumerWidget {
                         value: MaterialLocalizations.of(
                           context,
                         ).formatCompactDate(announcement.updatedAt),
+                      ),
+                    ],
+                    // Seen By section
+                    if (announcement.readCount > 0) ...[
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          // Show loading
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+
+                          try {
+                            final repository = ref.read(
+                              announcementsRepositoryProvider,
+                            );
+                            final readers = await repository
+                                .getAnnouncementReaders(announcement.id);
+
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop(); // Close loading dialog
+
+                            showSeenByBottomSheet(
+                              context: context,
+                              title: 'Announcement Seen By',
+                              readers: readers,
+                              sortByNewest: true,
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop(); // Close loading dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to load readers: $e'),
+                              ),
+                            );
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Seen by',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.mutedForeground.withValues(
+                                      alpha: 0.9,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${announcement.readCount}',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      announcement.readCount == 1
+                                          ? 'person'
+                                          : 'people',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      size: 16,
+                                      color: AppColors.success,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ],
